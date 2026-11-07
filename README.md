@@ -2,6 +2,8 @@
 
 One-on-one online duels in the browser, built on the [Final Gate](https://github.com/celsomisajr-ctrl/Final-Gate) engine.
 
+**Play now: [final-duel.celso-misa-jr.workers.dev](https://final-duel.celso-misa-jr.workers.dev)**
+
 Pick one of five heroes (Swordsman, Shaman, Archer, Gunner, Brawler), spend 10 stat points, choose two of four skills, and fight another player. The first hero to fall loses.
 
 ## Play
@@ -25,7 +27,7 @@ The repo deploys as a Cloudflare Worker with static assets ([`wrangler.jsonc`](w
 
 1. In the Cloudflare dashboard open **Workers & Pages → Create application → Import a repository**, connect GitHub and pick **Final-Duel**.
 2. Keep the root directory as `/` and the deploy command `npx wrangler deploy`, then deploy.
-3. Play at `https://final-duel.<your-subdomain>.workers.dev`. Every push to `main` redeploys.
+3. The live game is at [final-duel.celso-misa-jr.workers.dev](https://final-duel.celso-misa-jr.workers.dev). Every push to `main` redeploys.
 
 Online matches use the same Cloudflare TURN relay as Final Gate, so players on different networks can connect. On Cloudflare the game asks `/turn` on its own site, and [`cloudflare/worker.js`](cloudflare/worker.js) gets the credentials from the `final-gate-turn` Worker through a service binding, so that Worker needs no changes. If the relay is unavailable, the game falls back to public STUN servers and PeerJS's relay.
 
