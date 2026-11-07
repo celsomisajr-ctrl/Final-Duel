@@ -1,0 +1,11 @@
+{
+  // Hosts Final Duel on Cloudflare: the game files are served as static assets, and
+  // /turn hands out relay credentials by calling the existing final-gate-turn Worker.
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "final-duel",
+  "main": "cloudflare/worker.js",
+  "compatibility_date": "2025-06-01",
+  "workers_dev": true,
+  "assets": { "directory": ".", "binding": "ASSETS", "run_worker_first": ["/turn"] },
+  "services": [{ "binding": "TURN", "service": "final-gate-turn" }]
+}
