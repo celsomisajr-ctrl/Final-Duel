@@ -894,6 +894,12 @@ function shake(v){game.shake=Math.max(game.shake,v);if(game.ev)game.ev.push(['k'
 function aim(away){const p=game.p;if(p.mvx||p.mvy){const l=Math.hypot(p.mvx,p.mvy);return{x:p.mvx/l,y:p.mvy/l};}const t=dirTo(p,game.b);return away?{x:-t.x,y:-t.y}:t;}
 function startDash(dir,len,dur,onTouch,stop){const p=game.p;p.dash={vx:dir.x*len/dur,vy:dir.y*len/dur,t:dur,dur,onTouch,stop,touched:false};p.iframe=Math.max(p.iframe,dur+0.08);}
 function shoot(o){const p=game.p;game.shots.push(Object.assign({x:p.x,y:p.y,r:6,life:2,pierce:false,done:false,color:game.c.color,kind:'spirit',h:game.cur},o));}
+// Ease the rendered shot from the weapon into its existing collision path.
+function basicShotLead(s){
+  if(!s.launch)return 0;
+  const [x,y,length]=s.launch;
+  return Math.max(0,1-Math.hypot(s.x-x,s.y-y)/length);
+}
 function toward(speed){const t=dirTo(game.p,game.b);return{vx:t.x*speed,vy:t.y*speed};}
 function zone(o){game.zones.push(Object.assign({t:0,ticks:1,interval:0,done:0,color:game.c.color,h:game.cur},o,{next:o.delay}));}
 function haz(o){SFX.play('warn');game.haz.push(Object.assign({t:0,fired:false,dmg:60},o));}
@@ -1110,7 +1116,7 @@ function basicAttack(){
   const base=(g.key==='shaman'?d.atk+d.power*0.35:d.atk)*mul;
   if(!c.ranged&&g.key==='brawler'){p.punchN=(p.punchN||0)+1;const hook=p.punchN%3===0,t=dirTo(p,b);p.hook=hook;p.punchSide=hook?0:p.punchN%2;SFX.play(hook?'hook':'punch');hitBoss(base*c.meleeMul*(hook?1.3:.9),{canCrit:true,force});addStagger();g.hitstop=hook?.05:.02;fx({type:'punch',x:b.x-t.x*b.r*.85,y:b.y-t.y*b.r*.85,ang:Math.atan2(t.y,t.x),dur:hook?.26:.18,big:hook});}
   else if(!c.ranged){const sw=g.key==='swordsman';SFX.play(sw?'swBasic':'swing');hitBoss(base*c.meleeMul,{canCrit:true,force,quiet:sw});addStagger();const t=dirTo(p,b);fx({type:'slash',x:p.x+t.x*(p.r+18),y:p.y+t.y*(p.r+18),ang:Math.atan2(t.y,t.x)+Math.PI/2,r:26,color:hexA(c.color,1),dur:0.18});}
-  else{SFX.play(g.key==='gunner'?'gunShot':g.key==='shaman'?'shamanBasic':g.key==='archer'?'archerShot':c.proj.kind);const t=dirTo(p,b);shoot({vx:t.x*c.proj.speed,vy:t.y*c.proj.speed,dmg:base,canCrit:true,force,r:c.proj.r+(force?2:0),kind:c.proj.kind,color:force?'#ffe08a':c.color,life:p.buffs.anchor?3:1.6,homing:!!p.buffs.anchor});}
+  else{SFX.play(g.key==='gunner'?'gunShot':g.key==='shaman'?'shamanBasic':g.key==='archer'?'archerShot':c.proj.kind);const t=dirTo(p,b),launch=[p.x,p.y,clamp(dist(p,b)-b.r,60,110)];shoot({launch,vx:t.x*c.proj.speed,vy:t.y*c.proj.speed,dmg:base,canCrit:true,force,r:c.proj.r+(force?2:0),kind:c.proj.kind,color:force?'#ffe08a':c.color,life:p.buffs.anchor?3:1.6,homing:!!p.buffs.anchor});}
 }
 
 /* ---------- falling-sword helpers (old Judgement Blade, kept for co-op snapshots) ---------- */
@@ -1324,7 +1330,7 @@ function updateShots(dt){
   for(const s of g.shots){
     if(s.homing&&!b.dead){const sp=Math.hypot(s.vx,s.vy),t2=dirTo(s,b),k=Math.min(1,dt*12);s.vx+=(t2.x*sp-s.vx)*k;s.vy+=(t2.y*sp-s.vy)*k;const n=Math.hypot(s.vx,s.vy)||1;s.vx*=sp/n;s.vy*=sp/n;}
     s.life-=dt;s.x+=s.vx*dt;s.y+=s.vy*dt;
-    if((s.kind==='phoenix'||s.kind==='wave'||s.kind==='spirit')&&g.parts.length<700&&Math.random()<0.7)g.parts.push({x:s.x+rand(-s.r/2,s.r/2),y:s.y+rand(-s.r/2,s.r/2),vx:-s.vx*0.05,vy:-s.vy*0.05,color:s.color,size:rand(2,Math.max(2.5,s.r/3)),t:0,dur:0.35});
+    if((s.kind==='phoenix'||s.kind==='wave'||s.kind==='spirit')&&!basicShotLead(s)&&g.parts.length<700&&Math.random()<0.7)g.parts.push({x:s.x+rand(-s.r/2,s.r/2),y:s.y+rand(-s.r/2,s.r/2),vx:-s.vx*0.05,vy:-s.vy*0.05,color:s.color,size:rand(2,Math.max(2.5,s.r/3)),t:0,dur:0.35});
     if(!s.done&&!b.dead&&dist(s,b)<s.r+b.r){s.done=true;heroIn(s.h||meHero());if(s.supp){if(!(b.suppT>0))text(b.x,b.y-b.r-30,'Suppressed','#ffd08a',14);b.suppT=0.6;}hitBoss(s.dmg,{canCrit:s.canCrit,force:s.force,quiet:s.quiet});burst(s.x,s.y,s.color,s.r>12?18:6,s.r>12?220:120,2.5,0.35);if(!s.pierce)s.life=0;}
     if(s.x<-60||s.y<-60||s.x>g.W+60||s.y>g.H+60)s.life=0;
   }
@@ -1443,7 +1449,14 @@ function render(){
     if(!s.hit){ctx.strokeStyle='rgba(255,224,138,.75)';ctx.lineWidth=2;circle(ctx,s.x,s.y,95);ctx.stroke();}}
   {const ME=meHero();for(const HX of g.heroes){heroIn(HX);drawPlayer(ctx,g);}heroIn(ME);}
   for(const s of g.shots){
-    const a=Math.atan2(s.vy,s.vx);ctx.save();ctx.translate(s.x,s.y);ctx.rotate(a);
+    const a=Math.atan2(s.vy,s.vx),lead=basicShotLead(s),owner=s.h?.p;
+    let x=s.x,y=s.y;
+    if(lead&&owner&&!owner.dead){
+      const tip=fallbackWeaponTip(owner);
+      x+=(owner.x+Math.cos(owner.face)*tip-s.launch[0])*lead;
+      y+=(owner.y+Math.sin(owner.face)*tip-playerLift2D(owner)-s.launch[1])*lead;
+    }
+    ctx.save();ctx.translate(x,y);ctx.rotate(a);
     if(s.kind==='arrow'){ctx.strokeStyle=s.color;ctx.lineWidth=s.r>5?4:2.5;ctx.beginPath();ctx.moveTo(-20,0);ctx.lineTo(4,0);ctx.stroke();ctx.fillStyle=s.color;ctx.beginPath();ctx.moveTo(8,0);ctx.lineTo(0,-4);ctx.lineTo(0,4);ctx.fill();}
     else if(s.kind==='bullet'){ctx.strokeStyle=hexA(s.color.length===7?s.color:'#ffffff',0.5);ctx.lineWidth=s.r;ctx.beginPath();ctx.moveTo(-16,0);ctx.lineTo(0,0);ctx.stroke();ctx.fillStyle=s.color;circle(ctx,0,0,s.r*0.8);ctx.fill();}
     else if(s.kind==='wave'){ctx.strokeStyle=s.color;ctx.lineWidth=8;ctx.shadowColor=s.color;ctx.shadowBlur=18;ctx.beginPath();ctx.arc(-s.r,0,s.r*1.4,-0.9,0.9);ctx.stroke();}
@@ -1486,10 +1499,12 @@ function drawBoss(ctx,g){
   if(b.stunT>0){ctx.fillStyle='#ffe08a';for(let i=0;i<3;i++){const a=g.t*5+i*TAU/3;circle(ctx,Math.cos(a)*b.r*0.6,-b.r-10+Math.sin(a)*6,4);ctx.fill();}}
   ctx.restore();
 }
+const playerLift2D=p=>p.leap>0?Math.sin((1-p.leap/(p.leapT||0.45))*Math.PI)*22:0;
+const fallbackWeaponTip=p=>p.r+12;
 function drawPlayer(ctx,g){
   const p=g.p,c=g.c;if(p.dead)return;
   {const inR=!g.b.dead&&dist(p,g.b)-p.r-g.b.r<=g.d.range;ctx.save();ctx.strokeStyle=hexA(c.color,inR?0.55:0.22);ctx.lineWidth=inR?2:1.5;ctx.setLineDash([4,7]);circle(ctx,p.x,p.y,p.r+g.d.range);ctx.stroke();ctx.restore();}
-  const lift=p.leap>0?Math.sin((1-p.leap/(p.leapT||0.45))*Math.PI)*22:0;
+  const lift=playerLift2D(p);
   ctx.save();ctx.fillStyle='rgba(0,0,0,0.35)';ctx.beginPath();ctx.ellipse(p.x,p.y+p.r*0.85,p.r*(lift?0.7:1),p.r*0.35,0,0,TAU);ctx.fill();
   if(p.buffs.whirl){ctx.strokeStyle=hexA(c.color,0.7);ctx.lineWidth=3;for(let i=0;i<3;i++){const a=g.t*14+i*TAU/3;ctx.beginPath();ctx.arc(p.x,p.y,p.r+40,a,a+0.8);ctx.stroke();}}
   if(p.ko){const K=p.ko,up=K.t>KO.end?Math.max(0,1-(K.t-KO.end)/KO.out):1;if(up>0){ctx.save();ctx.globalAlpha=up;ctx.fillStyle='rgba(47,39,82,.55)';ctx.fillRect(K.cx-K.hw,K.cy-K.hw,K.hw*2,K.hw*2);
@@ -1503,7 +1518,7 @@ function drawPlayer(ctx,g){
   ctx.translate(p.x,p.y-lift);
   if(p.iframe>0&&!p.leap)ctx.globalAlpha=0.6;
   ctx.save();ctx.rotate(p.face);
-  if(c.ranged){ctx.fillStyle='#d9d2ee';ctx.fillRect(p.r-4,-3,16,6);}
+  if(c.ranged){ctx.fillStyle='#d9d2ee';ctx.fillRect(p.r-4,-3,fallbackWeaponTip(p)-(p.r-4),6);}
   else{ctx.strokeStyle='#e9e4f8';ctx.lineWidth=4;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(p.r-2,6);ctx.lineTo(p.r+18,6);ctx.stroke();}
   ctx.restore();
   if(p.empower>0){ctx.strokeStyle='#ffe08a';ctx.lineWidth=2;circle(ctx,0,0,p.r+5);ctx.stroke();}
@@ -1625,10 +1640,16 @@ function flushSprites(R,U){
 /* scene graph nodes */
 function N(G,col,o){return Object.assign({G,col:col?rgb(col):null,emi:[0,0,0],x:0,y:0,z:0,rx:0,ry:0,rz:0,sx:1,sy:1,sz:1,kids:[]},o||{});}
 function addN(par,n){par.kids.push(n);return n;}
-function drawNode(n,PM,ex){if(n.hidden)return;const M=mul(PM,trs(n.x,n.y,n.z,n.rx,n.ry,n.rz,n.sx,n.sy,n.sz));
+const nodeTransform=n=>trs(n.x,n.y,n.z,n.rx,n.ry,n.rz,n.sx,n.sy,n.sz);
+function drawNode(n,PM,ex){if(n.hidden)return;const M=mul(PM,nodeTransform(n));
   if(n.G){if(n.a!==undefined&&n.a<1)E.trans.push({G:n.G,M,col:n.col,a:n.a});else if(n.unlit)flat(n.G,M,[n.col[0],n.col[1],n.col[2],1],null,1);
     else lit(n.G,M,n.col,ex?[n.emi[0]+ex[0],n.emi[1]+ex[1],n.emi[2]+ex[2]]:n.emi,1);}
   for(const k of n.kids)drawNode(k,M,ex);}
+function weaponTip3D(hero){
+  let m=mul(nodeTransform(hero.root),nodeTransform(hero.body));
+  for(const node of hero.weaponNodes)m=mul(m,nodeTransform(node));
+  return [m[12],m[13],m[14]];
+}
 function buildHero3D(key,color){
   const D='#2b2440',S='#e6c3a0',MT='#cfd3dc',WD='#6b4a2f';
   const root=N(null),body=addN(root,N(null)),big=key==='brawler',robe=key==='shaman';
@@ -1647,14 +1668,15 @@ function buildHero3D(key,color){
     addN(armL,N(geo('shieldb',()=>boxS(2.6,15,12)),color,{x:3,y:-8}));
   }else if(key==='shaman'){
     addN(body,N(geo('hood',()=>cylG(0,8.8,14,7)),'#1f5c58',{y:hy+6}));
-    const st=addN(body,N(null,null,{x:5,y:24,z:13}));addN(st,N(geo('staff',()=>cylG(1.3,1.5,54,6)),WD,{y:2}));addN(st,N(E.G.sph,color,{y:31,sx:4.6,sy:4.6,sz:4.6,unlit:true}));H.staff=st;H.orb=[5,24+31,13];
+    const st=addN(body,N(null,null,{x:5,y:24,z:13}));addN(st,N(geo('staff',()=>cylG(1.3,1.5,54,6)),WD,{y:2}));const orb=addN(st,N(E.G.sph,color,{y:31,sx:4.6,sy:4.6,sz:4.6,unlit:true}));H.weaponNodes=[st,orb];H.staff=st;H.orb=[5,24+31,13];
   }else if(key==='archer'){
     addN(body,N(geo('ahood',()=>sphG(7.9,10,6,Math.PI/1.8)),'#3d6b2a',{y:hy}));
     const bow=addN(body,N(null,null,{x:11,y:27,z:-8}));addN(bow,N(geo('bow',()=>torusG(14,1.1,5,18,Math.PI)),WD,{rz:-Math.PI/2}));addN(bow,N(geo('string',()=>boxS(.5,28,.5)),'#eeeeee'));
+    H.weaponNodes=[bow,N(null,null,{x:14})];
     addN(body,N(geo('quiver',()=>cylG(3,3,17,6)),WD,{x:-7,y:29,z:3,rz:.45}));
   }else if(key==='gunner'){
     addN(body,N(geo('brim',()=>cylG(11.5,11.5,1.3,12)),'#4a3426',{y:hy+5}));addN(body,N(geo('crown',()=>cylG(6.5,7,8,10)),'#4a3426',{y:hy+9}));
-    addN(armR,N(geo('gunR',()=>boxS(4.5,20,5)),'#3a3a44',{y:-20}));addN(armL,N(geo('gunL',()=>boxS(3.4,14,4)),'#3a3a44',{y:-17}));
+    const pistol=addN(armR,N(geo('gunR',()=>boxS(4.5,20,5)),'#3a3a44',{y:-20}));H.weaponNodes=[armR,pistol,N(null,null,{y:-10})];addN(armL,N(geo('gunL',()=>boxS(3.4,14,4)),'#3a3a44',{y:-17}));
   }else if(key==='brawler'){
     const c=rgb(color),gem=[c[0]*.35,c[1]*.35,c[2]*.35],fist=geo('fistB',()=>sphG(6.8,10,8)),wrap=geo('wrap',()=>boxS(7,3.2,7)),pad=geo('pad',()=>sphG(7,10,8));
     H.fistR=addN(armR,N(fist,color,{y:-13,emi:gem}));H.fistL=addN(armL,N(fist,color,{y:-13,emi:gem}));addN(armR,N(wrap,'#f2f2f2',{y:-8.5}));addN(armL,N(wrap,'#f2f2f2',{y:-8.5}));
@@ -2394,14 +2416,23 @@ function render3D(){
     if(z.t<z.delay){const k=z.t/z.delay;decal(G.disc,z.x,z.y,z.r*k,z.r*k,0,z.color,.22,.74);}
   }
   /* projectiles */
-  for(const s of g.shots){const a=Math.atan2(s.vy,s.vx),y=22;
-    if(s.kind==='arrow'){flat(G.box,trs(s.x,y,s.y,0,-a,0,24,s.r>5?3:1.8,s.r>5?3:1.8),[...rgb(s.color),1],null,1);spr(s.x,y,s.y,16,16,s.color,.6);}
-    else if(s.kind==='bullet'){flat(G.box,trs(s.x,y,s.y,0,-a,0,14,2.2,2.2),[...rgb(s.color),1],null,1);spr(s.x,y,s.y,13,13,s.color,.75);}
+  for(const s of g.shots){
+    const a=Math.atan2(s.vy,s.vx),lead=basicShotLead(s);
+    let x=s.x,y=22,z=s.y;
+    if(lead&&s.h){
+      const model=S.heroes[g.heroes.indexOf(s.h)];
+      if(model?.weaponNodes&&!model.root.hidden){
+        const [wx,wy,wz]=weaponTip3D(model);
+        x+=(wx-s.launch[0])*lead;y+=(wy-y)*lead;z+=(wz-s.launch[1])*lead;
+      }
+    }
+    if(s.kind==='arrow'){flat(G.box,trs(x,y,z,0,-a,0,24,s.r>5?3:1.8,s.r>5?3:1.8),[...rgb(s.color),1],null,1);spr(x,y,z,16,16,s.color,.6);}
+    else if(s.kind==='bullet'){flat(G.box,trs(x,y,z,0,-a,0,14,2.2,2.2),[...rgb(s.color),1],null,1);spr(x,y,z,13,13,s.color,.75);}
     else if(s.kind==='wave'){decal(G.arc,s.x,s.y,s.r*1.6,s.r*1.6,-a,s.color,.95,20,true);spr(s.x,20,s.y,s.r*3,s.r*3,s.color,.8);}
     else if(s.kind==='phoenix')drawPhoenix(s,t);
     else if(s.big){const yy=36;flat(G.ball,trs(s.x,yy,s.y,0,0,0,s.r*.55,s.r*.55,s.r*.55),[1,1,1,1],null,1);spr(s.x,yy,s.y,s.r*5,s.r*5,s.color,.95);spr(s.x,yy,s.y,s.r*2,s.r*2,'#e6fbff',.9);
       for(let i=1;i<6;i++){spr(s.x-Math.cos(a)*s.r*.8*i,yy,s.y-Math.sin(a)*s.r*.8*i,s.r*(2.6-i*.35),s.r*(2.6-i*.35),s.color,.6-i*.1);}decal(G.disc,s.x,s.y,s.r,s.r*.9,0,'#000000',.3,.35);}
-    else{flat(G.ball,trs(s.x,y,s.y,0,0,0,s.r*.7,s.r*.7,s.r*.7),[1,1,1,1],null,1);spr(s.x,y,s.y,s.r*4.2,s.r*4.2,s.color,.95);}}
+    else{flat(G.ball,trs(x,y,z,0,0,0,s.r*.7,s.r*.7,s.r*.7),[1,1,1,1],null,1);spr(x,y,z,s.r*4.2,s.r*4.2,s.color,.95);}}
   for(const s of g.hshots){
     if(!s.skull){elemProjectile(g.boss.el.k,s.x,s.rock?26:24,s.y,s.r*(s.rock?1.1:.95),t,s.x*.01);}
     else if(s.skull){lit(G.ball,trs(s.x,28,s.y,0,0,0,s.r,s.r*.9,s.r),[.92,.89,.96],[.15,.14,.16],1);spr(s.x,28,s.y,s.r*4,s.r*4,el,.6);}
