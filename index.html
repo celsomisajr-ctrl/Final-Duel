@@ -1824,7 +1824,10 @@ function totemFX3D(g,tt,t){
   if(g.cur===meHero())for(let i=0;i<12;i++){const a=t*.6+i*TAU/12,a2=a+TAU/12*5;const p1=[tt.x+Math.cos(a)*tt.r*.96,2,tt.y+Math.sin(a)*tt.r*.96],p2=[tt.x+Math.cos(a2)*tt.r*.96,2,tt.y+Math.sin(a2)*tt.r*.96];beam(p1,p2,1.6,C,.18*fade);}
   /* channeling weaves rise from random spots in the well and tie onto the hero; each strand fades out
      and re-forms from a new spot every ~1.2 s, staggered */
-  if(inR){const hand=[p.x,26,p.y],S=tt.strands||(tt.strands=[]),NS=5;
+  /* strands are kept by the well's position, not on the well object: an online guest gets a fresh copy of every
+     well 20 times a second, which used to re-roll the strands each time and made them flicker far too fast */
+  if(inR){const hand=[p.x,26,p.y],WS=E.wellS||(E.wellS={}),wk=Math.round(tt.x)+','+Math.round(tt.y),S=WS[wk]||(WS[wk]=[]),NS=5;
+    if(Object.keys(WS).length>12)for(const k in WS)if(!g.totems.some(o=>Math.round(o.x)+','+Math.round(o.y)===k))delete WS[k];
     for(let i=0;i<NS;i++){const per=1.15+i*.07,cyc=(t+i*per/NS)/per,id=Math.floor(cyc),ph=cyc-id;
       if(!S[i]||S[i].id!==id){const a=rand(0,TAU),r=tt.r*(.3+.6*Math.sqrt(Math.random()));S[i]={id,x:tt.x+Math.cos(a)*r,z:tt.y+Math.sin(a)*r,lift:rand(34,62),wob:rand(10,18),seed:rand(0,99)};}
       const st=S[i],env=Math.min(1,Math.sin(Math.PI*ph)*1.6),from=[st.x,1.5,st.z],col=i%2?'#c8fff6':'#7ff5e4';
